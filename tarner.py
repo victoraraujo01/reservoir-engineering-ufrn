@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import pandas
 import numpy
+import time
+start_time = time.time()
 
 Sw_i = 0.2
 
@@ -41,31 +43,27 @@ def calc_Sliq(So, Sw_i):
     return So + Sw_i
 
 def calc_Krg_Kro_ratio(kr_dataframe, Sliq):
-    for (i, s) in enumerate(kr_dataframe.index):
+    s_inf = 0
+    kro_inf = 0
+    krg_inf = 0
+    for (i, s) in enumerate(sliq):
+        krg_sup = krg[i]
+        kro_sup = kro[i]
         if s == Sliq:
-            return krg[i] / kro[i]
+            return krg_sup / kro_sup
         elif s < Sliq:
-            s_inf = 0.
             if i == 0:
-                return krg[i] / kro[i]
+                return krg_sup / kro_sup
             s_sup = s
-            s_inf = kr_dataframe.index[i-1]
             factor = (Sliq - s_inf)/(s_sup - s_inf)
 
-            krg_interp = krg[i-1] + factor*(krg[i] - krg[i-1])
-            kro_interp = kro[i-1] + factor*(kro[i] - kro[i-1])
+            krg_interp = krg_inf + factor*(krg_sup - krg_inf)
+            kro_interp = kro_inf + factor*(kro_sup - kro_inf)
             return krg_interp/kro_interp
-    return krg[-1] / kro[-1]
-    # kr_tmp = kr_dataframe.copy()
-    # kr_tmp.loc[Sliq] = {
-    #     'Kro' : numpy.nan,
-    #     'Krg' : numpy.nan,
-    #     'Kg/Ko' : numpy.nan}
-
-    # kr_tmp.sort_index(inplace=True)
-    # kr_tmp.interpolate(method='values', inplace=True)
-    # kr_tmp['Kg/Ko'][Sliq] = kr_tmp['Krg'][Sliq]/kr_tmp['Kro'][Sliq]
-    # return kr_tmp['Kg/Ko'][Sliq]
+        s_inf = s
+        krg_inf = krg_sup
+        kro_inf = kro_sup
+    return krg_inf / kro_inf
 
 def calc_rgo(krg_kro_ratio, Rs, uo, ug, Bo, Bg):
     return Rs + krg_kro_ratio*(uo/ug)*(Bo/Bg)
@@ -77,11 +75,11 @@ class NpRatioEstimator(object):
         self.step = 0.000001
         self.current_ratio = 0.0
         self.reset()
-    
+
     def reset(self):
         self.min_ratio = 0
         self.max_ratio = 1
-        
+
     def next(self, delta_Gp_EBM, delta_Gp_RGO):
         if self.isCumulative:
             self.current_ratio += self.step
@@ -92,7 +90,7 @@ class NpRatioEstimator(object):
             elif delta_Gp_EBM < delta_Gp_RGO:
                 if self.current_ratio < self.max_ratio:
                     self.max_ratio = self.current_ratio
-        
+
             self.current_ratio = (self.max_ratio + self.min_ratio)/2
         return self.current_ratio
 
@@ -131,7 +129,7 @@ answer = pandas.DataFrame({
 answer.set_index('P', inplace=True)
 
 # Inicializando estimador de Np/N
-estimator = NpRatioEstimator(True)
+estimator = NpRatioEstimator(isCumulative=False)
 
 for i in range(p_index + 1, pressures_desc_order.size):
     # "1) Faça n=n+1 e escolha uma pressão menor do que a anterior (Pn+1 < Pn)"
@@ -194,3 +192,5 @@ for i in range(p_index + 1, pressures_desc_order.size):
         'RGO': rgo
     }            
     print(answer)
+
+print("--- %s seconds ---" % (time.time() - start_time))
