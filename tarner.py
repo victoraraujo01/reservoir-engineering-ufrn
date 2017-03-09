@@ -42,7 +42,7 @@ def calc_So(Np_N_ratio, Bo, Bo_i, Sw_i):
 def calc_Sliq(So, Sw_i):
     return So + Sw_i
 
-def calc_Krg_Kro_ratio(kr_dataframe, Sliq):
+def calc_Krg_Kro_ratio_by_interpolation(kr_dataframe, Sliq):
     s_inf = 0
     kro_inf = 0
     krg_inf = 0
@@ -65,6 +65,12 @@ def calc_Krg_Kro_ratio(kr_dataframe, Sliq):
         kro_inf = kro_sup
     return krg_inf / kro_inf
 
+
+def calc_Krg_Kro_ratio_by_regression(Sliq):
+    krg = -1.9882*Sliq**4 + 4.3949*Sliq**3 - 2.2544*Sliq**2 - 0.9126*Sliq + 0.7544
+    kro = 1.2464*Sliq**4 - 2.9171*Sliq**3 + 4.5689*Sliq**2 - 2.1977*Sliq + 0.3193
+    return krg / kro
+
 def calc_rgo(krg_kro_ratio, Rs, uo, ug, Bo, Bg):
     return Rs + krg_kro_ratio*(uo/ug)*(Bo/Bg)
 
@@ -72,7 +78,7 @@ class NpRatioEstimator(object):
     def __init__(self, isCumulative=False):
         super(NpRatioEstimator, self).__init__()
         self.isCumulative = isCumulative
-        self.step = 0.000001
+        self.step = 0.0000001
         self.current_ratio = 0.0
         self.reset()
 
@@ -99,7 +105,7 @@ class NpRatioEstimator(object):
 ordered_pvt = pvt.sort_index(ascending=False)
 pressures_desc_order = ordered_pvt.index
 
-# Obtém pressão de bolha escolhida no combobox
+# Define pressão de bolha
 pbubble = 180.0
 p_index = pressures_desc_order.get_loc(pbubble)
 
@@ -107,18 +113,18 @@ p_index = pressures_desc_order.get_loc(pbubble)
 Rs_i = pvt['Rs'][pbubble]
 Bo_i = pvt['Bo'][pbubble]
 
-#Variáveis da iteração anterior
+# Variáveis da iteração anterior
 prev_Gp_N_ratio_EBM = 0
 prev_Np_N_ratio = 0
 prev_rgo = Rs_i
 
-#Variáveis da iteração atual
+# Variáveis da iteração atual
 Gp_N_ratio_EBM = 0
 Np_N_ratio = 0
 rgo = Rs_i
 
 # Tolerância definida na interface
-tolerance = 0.0001
+tolerance = 0.000001
 
 # Dataframe contendo a resposta
 answer = pandas.DataFrame({
@@ -172,7 +178,7 @@ for i in range(p_index + 1, pressures_desc_order.size):
         new_Sliq = calc_Sliq(new_So, Sw_i)
 
         # "8) Com a Sliq obter (Krg/Kro) das curvas de permeabilidade relativa"
-        new_Krg_Kro_ratio = calc_Krg_Kro_ratio(kr, new_Sliq)
+        new_Krg_Kro_ratio = calc_Krg_Kro_ratio_by_regression(new_Sliq)
         
         # "9) Calcular a RGOn+1 usando (Krg/Kro) e os dados PVT (Eq. 5.4)"
         rgo = calc_rgo(new_Krg_Kro_ratio,  Rs, uo, ug, Bo, Bg)
@@ -182,8 +188,6 @@ for i in range(p_index + 1, pressures_desc_order.size):
         
         # "11) Calcular ΔGp2 = ΔNpn+1. Rm"
         delta_Gp_N_ratio_RGO = mean_rgo * (Np_N_ratio - prev_Np_N_ratio)
-
-        # print(Np_N_ratio, error, delta_Gp_N_ratio_EBM, new_So, new_Sliq, new_Krg_Kro_ratio, delta_Gp_N_ratio_RGO)
 
         error = abs((delta_Gp_N_ratio_RGO - delta_Gp_N_ratio_EBM)/delta_Gp_N_ratio_EBM)
 
